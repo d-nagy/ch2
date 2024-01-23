@@ -256,6 +256,8 @@ class Results:
                     logging.debug("Partial Loop")
 
                 for qry in qry_dict: # individual query
+                    if qry_dict[qry][3][-2:] == "µs":
+                        q_time = float(qry_dict[qry][3][:-2])/1000/1000
                     if qry_dict[qry][3][-2:] == "ms":
                         q_time = float(qry_dict[qry][3][:-2])/1000
                     elif qry_dict[qry][3][-1:] == "s":
