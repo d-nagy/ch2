@@ -519,6 +519,7 @@ if __name__ == '__main__':
             l.execute()
             driver.loadFinish()
         else:
+            args.pop("config")
             startLoading(driverClass, schema, scaleParameters, args, config, customerExtraFields, ordersExtraFields, itemExtraFields, load_mode, kv_timeout, bulkload_batch_size, datagenSeed)
         load_time = time.time() - load_start
     ## IF
