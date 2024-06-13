@@ -102,6 +102,11 @@ def startLoading(
     pool.close()
     logging.debug("Waiting for %d loaders to finish" % numClients)
     pool.join()
+
+    for i, r in enumerate(loader_results):
+        logging.info("Errors for Client ID %d process: %s" % (i, r.get()))
+
+
 ## DEF
 
 ## ==============================================
