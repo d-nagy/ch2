@@ -264,6 +264,11 @@ if __name__ == '__main__':
     aparser.add_argument('--itemExtraFields', default=constants.CH2_ITEM_EXTRA_FIELDS["NOT_SET"], type=int,
                          help='Number of extra unused fields in Item')
 
+    aparser.add_argument(
+        "--docgen-load",
+        action="store_true",
+        help="Enable storing the data locally in JSON files",
+    )
     aparser.add_argument('--print-config', action='store_true',
                          help='Print out the default configuration file for the system and exit')
     aparser.add_argument('--debug', action='store_true',
@@ -381,12 +386,6 @@ if __name__ == '__main__':
             logging.info("Cannot specify multiple types of load")
             sys.exit(0)
 
-    if args['datasvc_load']:
-        if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:
-            load_mode = constants.CH2_DRIVER_LOAD_MODE["DATASVC_LOAD"]
-        else:
-            logging.info("Cannot specify multiple types of load")
-            sys.exit(0)
 
     if args['bulkload_batch_size']:
         bulkload_batch_size = args['bulkload_batch_size']
@@ -394,12 +393,13 @@ if __name__ == '__main__':
     if args['kv_timeout']:
         kv_timeout = args['kv_timeout']
 
-    if args['qrysvc_load']:
-        if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:
-            load_mode = constants.CH2_DRIVER_LOAD_MODE["QRYSVC_LOAD"]
-        else:
-            logging.info("Cannot specify multiple types of load")
-            sys.exit(0)
+    for load_mode_arg in ("datasvc_load", "qrysvc_load", "docgen_load"):
+        if args[load_mode_arg]:
+            if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:
+                load_mode = constants.CH2_DRIVER_LOAD_MODE[load_mode_arg.upper()]
+            else:
+                logging.info("Cannot specify multiple types of load")
+                sys.exit(0)
 
     if not args['no_load'] and not args['system'] == "mongodb":
        if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:

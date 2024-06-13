@@ -158,10 +158,11 @@ CH2_BUCKET = "bench"
 CH2_SCOPE = "ch2"
 
 CH2_DRIVER_LOAD_MODE = {
-    "NOT_SET":-1,
-    "DATASVC_BULKLOAD":0,
-    "DATASVC_LOAD":1,
-    "QRYSVC_LOAD":2
+    "NOT_SET": -1,
+    "DATASVC_BULKLOAD": 0,
+    "DATASVC_LOAD": 1,
+    "QRYSVC_LOAD": 2,
+    "DOCGEN_LOAD": 3,
 }
 CH2_DRIVER_SCHEMA = {
     "CH2":0,

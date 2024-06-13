@@ -33,9 +33,14 @@ import random
 import numpy as np
 import constants
 import string
+
+import numpy as np
 from . import nurand
 
 SYLLABLES = [ "BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE", "ANTI", "CALLY", "ATION", "EING" ]
+
+NP_ALPHANUMERIC = np.array(list(string.ascii_letters + string.digits))
+
 
 class Rand:
 
@@ -46,6 +51,11 @@ class Rand:
         if datagenSeed != constants.CH2_DATAGEN_SEED_NOT_SET:
             self.rng.seed(datagenSeed)
             self.nprng = np.random.default_rng(datagenSeed)
+
+        self.random_bytes_for_astring = self._gen_random_bytes_for_astring()
+        self.astring_randint_idx = 0
+        self.random_bytes_for_nstring = self._gen_random_bytes_for_nstring()
+        self.nstring_randint_idx = 0
 
     def setNURand(self, nu):
         self.nurandVar = nu
@@ -70,11 +80,8 @@ class Rand:
     ## DEF
 
     def number(self, minimum, maximum):
-        if self.rng == None:
-            value = random.randint(minimum, maximum)
-        else:
-            value = self.rng.randint(minimum, maximum)
-            assert minimum <= value and value <= maximum
+        value = int(self.rng.random() * (maximum - minimum + 1)) + minimum
+        assert minimum <= value and value <= maximum
         return value
     ## DEF
 
@@ -96,10 +103,7 @@ class Rand:
         assert decimal_places > 0
         assert minimum < maximum
 
-        multiplier = 1
-        for i in range(0, decimal_places):
-            multiplier *= 10
-
+        multiplier = 10**decimal_places
         int_min = int(minimum * multiplier + 0.5)
         int_max = int(maximum * multiplier + 0.5)
 
@@ -119,22 +123,53 @@ class Rand:
         return rows
     ## DEF
 
+    def _gen_random_bytes_for_astring(self):
+        # ord('a') = 97, ord('z') = 122
+        return self.nprng.randint(97, 123, size=10_000_000, dtype="int32").view("U1")
+
+    def _maybe_refresh_random_bytes_for_astring(self, next_astring_idx):
+        if next_astring_idx >= self.random_bytes_for_astring.size:
+            self.random_bytes_for_astring = self._gen_random_bytes_for_astring()
+            self.astring_randint_idx = 0
+
     def astring(self, minimum_length, maximum_length):
         """A random alphabetic string with length in range [minimum_length, maximum_length]."""
-        return self.randomString(minimum_length, maximum_length, 'a', 26)
+        length = self.number(minimum_length, maximum_length)
+        next_astring_idx = self.astring_randint_idx + length
+
+        self._maybe_refresh_random_bytes_for_astring(next_astring_idx)
+
+        string = (
+            self.random_bytes_for_astring[self.astring_randint_idx : next_astring_idx]
+            .view("U%d" % length)
+            .item()
+        )
+        self.astring_randint_idx = next_astring_idx
+        return string
     ## DEF
+
+    def _gen_random_bytes_for_nstring(self):
+        # ord('0') = 48, ord('9') = 57
+        return self.nprng.randint(48, 58, size=10_000_000, dtype="int32").view("U1")
+
+    def _maybe_refresh_random_bytes_for_nstring(self, next_nstring_idx):
+        if next_nstring_idx >= self.random_bytes_for_nstring.size:
+            self.random_bytes_for_nstring = self._gen_random_bytes_for_nstring()
+            self.nstring_randint_idx = 0
 
     def nstring(self, minimum_length, maximum_length):
         """A random numeric string with length in range [minimum_length, maximum_length]."""
-        return self.randomString(minimum_length, maximum_length, '0', 10)
-    ## DEF
-
-    def randomString(self, minimum_length, maximum_length, base, numCharacters):
         length = self.number(minimum_length, maximum_length)
-        baseByte = ord(base)
-        string = ""
-        for i in range(length):
-            string += chr(baseByte + self.number(0, numCharacters-1))
+        next_nstring_idx = self.nstring_randint_idx + length
+
+        self._maybe_refresh_random_bytes_for_nstring(next_nstring_idx)
+
+        string = (
+            self.random_bytes_for_nstring[nstring_randint_idx : next_nstring_idx]
+            .view("U%d" % length)
+            .item()
+        )
+        nstring_randint_idx = next_nstring_idx
         return string
     ## DEF
 
@@ -144,11 +179,8 @@ class Rand:
     ## DEF
 
     def randomStringLength(self, length):
-        # With combination of lower and upper case and digits
-        if self.rng == None:
-            return ''.join(random.choice(string.ascii_letters+string.digits) for i in range(length))
-        else:
-            return ''.join(self.rng.choice(string.ascii_letters+string.digits) for i in range(length))
+    # With combination of lower and upper case and digits
+        return self.nprng.choice(NP_ALPHANUMERIC, length).view("U%d" % length).item()
     ## DEF
 
     def randomStringsWithEmbeddedSubstrings(self, minimum_length, maximum_length, substr1, substr2):
@@ -160,7 +192,13 @@ class Rand:
         l1 = self.number(0, rlength - lenSubstr1 - lenSubstr2)
         l2 = self.number(0, rlength - l1 - lenSubstr1 - lenSubstr2)
         l3 = rlength - l1 - l2 - lenSubstr1 - lenSubstr2
-        return self.randomStringLength(l1) + substr1 + self.randomStringLength(l2) + substr2 + self.randomStringLength(l3)
+        return (
+            self.randomStringLength(l1)
+            if l1
+            else "" + substr1 + self.randomStringLength(l2)
+            if l2
+            else "" + substr2 + self.randomStringLength(l3)
+        )
     ## DEF
 
     def makeLastName(self, number):
