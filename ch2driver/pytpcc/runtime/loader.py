@@ -726,7 +726,14 @@ class Loader:
     ## DEF
 
     def computeRandomRangeTime(self, dateObj):
-        return dateObj.strftime("%Y-%m-%d %H:%M:%S")
+        return "%d-%02d-%02d %02d:%02d:%02d" % (
+            dateObj.year,
+            dateObj.month,
+            dateObj.day,
+            dateObj.hour,
+            dateObj.minute,
+            dateObj.second,
+        )
 
     ## DEF
 
