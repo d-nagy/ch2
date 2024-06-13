@@ -129,13 +129,14 @@ class NestcollectionsdocgenDriver(AbstractDriver):
                     batch_idx += 1
                     cur_batch = []
                     batch_size = 0
-                    self.batches[tableName] = [batch_idx, cur_batch, batch_size]
                     continue
                 else:
                     logging.debug(
                         "Client ID # %d failed bulk load data into KV, aborting..."
                         % self.client_id
                     )
+
+        self.batches[tableName] = [batch_idx, cur_batch, batch_size]
 
     def getOneDoc(self, tableName, tuple):
         columns = TABLE_COLUMNS[tableName]
