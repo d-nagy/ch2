@@ -40,7 +40,7 @@ import constants
 from .abstractdriver import AbstractDriver
 
 
-from .nestcollectionsdriver import TABLE_COLUMNS
+from .nestcollectionsdriver import KEYNAMES, TABLE_COLUMNS
 
 from datetime import datetime
 
@@ -140,8 +140,13 @@ class NestcollectionsdocgenDriver(AbstractDriver):
 
     def getOneDoc(self, tableName, tuple):
         columns = TABLE_COLUMNS[tableName]
+        keynames = KEYNAMES[tableName]
 
-        val = {}
+        key = str(keynames[0])
+        for k in keynames[1:]:
+            key += ".%s" % tuple[k]
+
+        val = {"key": key}
         for v, col in zip(tuple, columns):
             v1 = v
             if tableName == constants.TABLENAME_ORDERS and col == "o_orderline":
