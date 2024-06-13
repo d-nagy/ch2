@@ -473,6 +473,7 @@ if __name__ == '__main__':
             l.execute()
             driver.loadFinish()
         else:
+            args.pop("config")
             startLoading(driverClass, scaleParameters, args, config, load_mode, kv_timeout, bulkload_batch_size)
         load_time = time.time() - load_start
     ## IF
