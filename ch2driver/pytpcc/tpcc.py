@@ -36,7 +36,7 @@ import argparse
 import glob
 import time
 import multiprocessing
-from configparser import SafeConfigParser
+from configparser import ConfigParser
 from pprint import pprint,pformat
 import constants
 from util import *
@@ -72,7 +72,15 @@ def getDrivers():
 ## ==============================================
 ## startLoading
 ## ==============================================
-def startLoading(driverClass, scaleParameters, args, configi, load_mode, kv_timeout, bulkload_batch_size):
+def startLoading(
+    driverClass,
+    scaleParameters,
+    args,
+    config,
+    load_mode,
+    kv_timeout,
+    bulkload_batch_size,
+):
     numClients = args['tclients'] + args['aclients']
     logging.debug("Creating client pool with %d processes" % numClients)
     pool = multiprocessing.Pool(numClients)
@@ -100,7 +108,14 @@ def startLoading(driverClass, scaleParameters, args, configi, load_mode, kv_time
 ## loaderFunc
 ## ==============================================
 def loaderFunc(clientId, driverClass, scaleParameters, args, config, w_ids, load_mode, kv_timeout, bulkload_batch_size, debug):
-    driver = driverClass(args['ddl'], clientId, "L", load_mode, kv_timeout, bulkload_batch_size)
+    driver = driverClass(
+        ddl=args["ddl"],
+        clientId=clientId,
+        TAFlag="L",
+        load_mode=load_mode,
+        kv_timeout=kv_timeout,
+        bulkload_batch_size=bulkload_batch_size,
+    )
     assert driver != None
     logging.debug("Starting client execution: %s [warehouses=%d]" % (driver, len(w_ids)))
 
@@ -249,6 +264,11 @@ if __name__ == '__main__':
                          help='Enable loading the data through the data service')
     aparser.add_argument('--qrysvc-load', action='store_true',
                          help='Enable loading the data through the query service')
+    aparser.add_argument(
+        "--docgen-load",
+        action="store_true",
+        help="Enable storing the data locally in JSON files",
+    )
     aparser.add_argument('--print-config', action='store_true',
                          help='Print out the default configuration file for the system and exit')
     aparser.add_argument('--debug', action='store_true',
@@ -314,12 +334,6 @@ if __name__ == '__main__':
             logging.info("Cannot specify multiple types of load")
             sys.exit(0)
 
-    if args['datasvc_load']:
-        if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:
-            load_mode = constants.CH2_DRIVER_LOAD_MODE["DATASVC_LOAD"]
-        else:
-            logging.info("Cannot specify multiple types of load")
-            sys.exit(0)
 
     if args['bulkload_batch_size']:
         bulkload_batch_size = args['bulkload_batch_size']
@@ -327,12 +341,13 @@ if __name__ == '__main__':
     if args['kv_timeout']:
         kv_timeout = args['kv_timeout']
 
-    if args['qrysvc_load']:
-        if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:
-            load_mode = constants.CH2_DRIVER_LOAD_MODE["QRYSVC_LOAD"]
-        else:
-            logging.info("Cannot specify multiple types of load")
-            sys.exit(0)
+    for load_mode_arg in ("datasvc_load", "qrysvc_load", "docgen_load"):
+        if args[load_mode_arg]:
+            if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:
+                load_mode = constants.CH2_DRIVER_LOAD_MODE[load_mode_arg.upper()]
+            else:
+                logging.info("Cannot specify multiple types of load")
+                sys.exit(0)
 
     if not args['no_load']:
        if load_mode == constants.CH2_DRIVER_LOAD_MODE["NOT_SET"]:
@@ -401,8 +416,15 @@ if __name__ == '__main__':
     assert driverClass != None, "Failed to find '%s' class" % args['system']
     val = -1
     if args['no_execute']:
-         val = 0
-         driver = driverClass(args['ddl'], val, "L", load_mode, kv_timeout, bulkload_batch_size)
+        val = 0
+        driver = driverClass(
+            ddl=args["ddl"],
+            clientId=val,
+            TAFlag="L",
+            load_mode=load_mode,
+            kv_timeout=kv_timeout,
+            bulkload_batch_size=bulkload_batch_size,
+        )
     else:
         TAFlag = "T"
         if numClients == 1:
@@ -420,7 +442,7 @@ if __name__ == '__main__':
     ## Load Configuration file
     if args['config']:
         logging.debug("Loading configuration file '%s'" % args['config'])
-        cparser = SafeConfigParser()
+        cparser = ConfigParser()
         cparser.read(os.path.realpath(args['config'].name))
         config = dict(cparser.items(args['system']))
     else:

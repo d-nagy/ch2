@@ -31,6 +31,8 @@
 
 import random
 import string
+
+import numpy as np
 from . import nurand
 
 SYLLABLES = [ "BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE", "ANTI", "CALLY", "ATION", "EING" ]
@@ -61,7 +63,7 @@ def NURand(a, x, y):
 ## DEF
 
 def number(minimum, maximum):
-    value = random.randint(minimum, maximum)
+    value = int(random.random() * (maximum - minimum + 1)) + minimum
     assert minimum <= value and value <= maximum
     return value
 ## DEF
@@ -84,10 +86,7 @@ def fixedPoint(decimal_places, minimum, maximum):
     assert decimal_places > 0
     assert minimum < maximum
 
-    multiplier = 1
-    for i in range(0, decimal_places):
-        multiplier *= 10
-
+    multiplier = 10**decimal_places
     int_min = int(minimum * multiplier + 0.5)
     int_max = int(maximum * multiplier + 0.5)
 
@@ -107,45 +106,102 @@ def selectUniqueIds(numUnique, minimum, maximum):
     return rows
 ## DEF
 
+
+def _gen_random_bytes_for_astring():
+    # ord('a') = 97, ord('z') = 122
+    return np.random.randint(97, 123, size=10_000_000, dtype="int32").view("U1")
+
+
+random_bytes_for_astring = _gen_random_bytes_for_astring()
+astring_randint_idx = 0
+
+
 def astring(minimum_length, maximum_length):
     """A random alphabetic string with length in range [minimum_length, maximum_length]."""
-    return randomString(minimum_length, maximum_length, 'a', 26)
+    global random_bytes_for_astring
+    global astring_randint_idx
+    length = number(minimum_length, maximum_length)
+
+    if astring_randint_idx + length >= random_bytes_for_astring.size:
+        random_bytes_for_astring = _gen_random_bytes_for_astring()
+        astring_randint_idx = 0
+
+    string = (
+        random_bytes_for_astring[astring_randint_idx : astring_randint_idx + length]
+        .view("U%d" % length)
+        .item()
+    )
+    astring_randint_idx += length
+    return string
+
+
 ## DEF
+
+def _gen_random_bytes_for_nstring():
+    # ord('0') = 48, ord('9') = 57
+    return np.random.randint(48, 58, size=10_000_000, dtype="int32").view("U1")
+
+
+random_bytes_for_nstring = _gen_random_bytes_for_nstring()
+nstring_randint_idx = 0
+
 
 def nstring(minimum_length, maximum_length):
     """A random numeric string with length in range [minimum_length, maximum_length]."""
-    return randomString(minimum_length, maximum_length, '0', 10)
-## DEF
-
-def randomString(minimum_length, maximum_length, base, numCharacters):
+    global random_bytes_for_nstring
+    global nstring_randint_idx
     length = number(minimum_length, maximum_length)
-    baseByte = ord(base)
-    string = ""
-    for i in range(length):
-        string += chr(baseByte + number(0, numCharacters-1))
+
+    if nstring_randint_idx + length >= random_bytes_for_nstring.size:
+        random_bytes_for_nstring = _gen_random_bytes_for_nstring()
+        nstring_randint_idx = 0
+
+    string = (
+        random_bytes_for_nstring[nstring_randint_idx : nstring_randint_idx + length]
+        .view("U%d" % length)
+        .item()
+    )
+    nstring_randint_idx += length
     return string
+
+
 ## DEF
 
 def randomStringMinMax(minimum_length, maximum_length):
     length = number(minimum_length, maximum_length)
     return randomStringLength(length)
+
+
 ## DEF
+
+alphanumeric = np.array(list(string.ascii_letters + string.digits))
+
 
 def randomStringLength(length):
    # With combination of lower and upper case and digits
-   return ''.join(random.choice(string.ascii_letters+string.digits) for i in range(length))
+    return np.random.choice(alphanumeric, length).view("U%d" % length).item()
+
+
 ## DEF
 
 def randomStringsWithEmbeddedSubstrings(minimum_length, maximum_length, substr1, substr2):
-  lenSubstr1 = len(substr1)
-  lenSubstr2 = len(substr2)
-  rlength = 0
-  while rlength < lenSubstr1 + lenSubstr2:
-      rlength = number(minimum_length, maximum_length)
-  l1 = number(0, rlength - lenSubstr1 - lenSubstr2)
-  l2 = number(0, rlength - l1 - lenSubstr1 - lenSubstr2)
-  l3 = rlength - l1 - l2 - lenSubstr1 - lenSubstr2
-  return randomStringLength(l1) + substr1 + randomStringLength(l2) + substr2 + randomStringLength(l3)
+    lenSubstr1 = len(substr1)
+    lenSubstr2 = len(substr2)
+    rlength = 0
+    while rlength < lenSubstr1 + lenSubstr2:
+        rlength = number(minimum_length, maximum_length)
+    l1 = number(0, rlength - lenSubstr1 - lenSubstr2)
+    l2 = number(0, rlength - l1 - lenSubstr1 - lenSubstr2)
+    l3 = rlength - l1 - l2 - lenSubstr1 - lenSubstr2
+    return (
+        randomStringLength(l1)
+        if l1
+        else "" + substr1 + randomStringLength(l2)
+        if l2
+        else "" + substr2 + randomStringLength(l3)
+    )
+
+
 ## DEF
 
 def makeLastName(number):

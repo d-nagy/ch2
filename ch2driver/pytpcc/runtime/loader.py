@@ -35,7 +35,7 @@ import sys
 import logging
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from random import shuffle, randrange, sample
+from random import random, shuffle, sample
 from pprint import pprint,pformat
 
 import constants
@@ -548,14 +548,23 @@ class Loader:
     ## DEF
 
     def computeRandomRangeDate(self, startDate, endDate):
-         delta = endDate - startDate
-         deltaSecs = (delta.days * self.numSecsPerDay) + delta.seconds
-         randomTime = randrange(deltaSecs)
-         return startDate + timedelta(seconds=randomTime)
+        delta = endDate - startDate
+        deltaSecs = (delta.days * self.numSecsPerDay) + delta.seconds
+        randomTime = int(random() * deltaSecs)
+        return startDate + timedelta(seconds=randomTime)
+
     ## DEF
 
     def computeRandomRangeTime(self, dateObj):
-         return dateObj.strftime("%Y-%m-%d %H:%M:%S")
+        return "%d-%02d-%02d %02d:%02d:%02d" % (
+            dateObj.year,
+            dateObj.month,
+            dateObj.day,
+            dateObj.hour,
+            dateObj.minute,
+            dateObj.second,
+        )
+
     ## DEF
 
 ## CLASS
