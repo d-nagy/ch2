@@ -142,7 +142,7 @@ class NestcollectionsdocgenDriver(AbstractDriver):
         columns = TABLE_COLUMNS[tableName]
         keynames = KEYNAMES[tableName]
 
-        key = str(keynames[0])
+        key = str(tuple[keynames[0]])
         for k in keynames[1:]:
             key += ".%s" % tuple[k]
 
