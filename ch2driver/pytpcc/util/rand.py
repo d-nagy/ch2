@@ -34,7 +34,6 @@ import numpy as np
 import constants
 import string
 
-import numpy as np
 from . import nurand
 
 SYLLABLES = [ "BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE", "ANTI", "CALLY", "ATION", "EING" ]
@@ -125,19 +124,18 @@ class Rand:
 
     def _gen_random_bytes_for_astring(self):
         # ord('a') = 97, ord('z') = 122
-        return self.nprng.randint(97, 123, size=10_000_000, dtype="int32").view("U1")
+        return self.nprng.integers(97, 123, size=10_000_000, dtype="int32").view("U1")
 
-    def _maybe_refresh_random_bytes_for_astring(self, next_astring_idx):
-        if next_astring_idx >= self.random_bytes_for_astring.size:
+    def _maybe_refresh_random_bytes_for_astring(self, astring_len):
+        if self.astring_randint_idx + astring_len >= self.random_bytes_for_astring.size:
             self.random_bytes_for_astring = self._gen_random_bytes_for_astring()
             self.astring_randint_idx = 0
 
     def astring(self, minimum_length, maximum_length):
         """A random alphabetic string with length in range [minimum_length, maximum_length]."""
         length = self.number(minimum_length, maximum_length)
+        self._maybe_refresh_random_bytes_for_astring(length)
         next_astring_idx = self.astring_randint_idx + length
-
-        self._maybe_refresh_random_bytes_for_astring(next_astring_idx)
 
         string = (
             self.random_bytes_for_astring[self.astring_randint_idx : next_astring_idx]
@@ -146,30 +144,30 @@ class Rand:
         )
         self.astring_randint_idx = next_astring_idx
         return string
+
     ## DEF
 
     def _gen_random_bytes_for_nstring(self):
         # ord('0') = 48, ord('9') = 57
-        return self.nprng.randint(48, 58, size=10_000_000, dtype="int32").view("U1")
+        return self.nprng.integers(48, 58, size=10_000_000, dtype="int32").view("U1")
 
-    def _maybe_refresh_random_bytes_for_nstring(self, next_nstring_idx):
-        if next_nstring_idx >= self.random_bytes_for_nstring.size:
+    def _maybe_refresh_random_bytes_for_nstring(self, nstring_len):
+        if self.nstring_randint_idx + nstring_len >= self.random_bytes_for_nstring.size:
             self.random_bytes_for_nstring = self._gen_random_bytes_for_nstring()
             self.nstring_randint_idx = 0
 
     def nstring(self, minimum_length, maximum_length):
         """A random numeric string with length in range [minimum_length, maximum_length]."""
         length = self.number(minimum_length, maximum_length)
+        self._maybe_refresh_random_bytes_for_nstring(length)
         next_nstring_idx = self.nstring_randint_idx + length
 
-        self._maybe_refresh_random_bytes_for_nstring(next_nstring_idx)
-
         string = (
-            self.random_bytes_for_nstring[nstring_randint_idx : next_nstring_idx]
+            self.random_bytes_for_nstring[self.nstring_randint_idx : next_nstring_idx]
             .view("U%d" % length)
             .item()
         )
-        nstring_randint_idx = next_nstring_idx
+        self.nstring_randint_idx = next_nstring_idx
         return string
     ## DEF
 
