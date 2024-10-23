@@ -60,18 +60,13 @@ class NestcollectionsdocgenDriver(AbstractDriver):
         self,
         ddl,
         clientId,
-        TAFlag="L",
         schema=constants.CH2_DRIVER_SCHEMA["CH2"],
-        preparedTransactionQueries={},
-        analyticalQueries=constants.CH2_DRIVER_ANALYTICAL_QUERIES[
-            "HAND_OPTIMIZED_QUERIES"
-        ],
         customerExtraFields=constants.CH2_CUSTOMER_EXTRA_FIELDS["NOT_SET"],
         ordersExtraFields=constants.CH2_ORDERS_EXTRA_FIELDS["NOT_SET"],
         itemExtraFields=constants.CH2_ITEM_EXTRA_FIELDS["NOT_SET"],
-        load_mode=constants.CH2_DRIVER_LOAD_MODE["NOT_SET"],
-        kv_timeout=constants.CH2_DRIVER_KV_TIMEOUT,
         bulkload_batch_size=constants.CH2_DRIVER_BULKLOAD_BATCH_SIZE,
+        *args,
+        **kwargs,
     ):
         super().__init__("nestcollectionsdocgen", ddl)
         self.client_id = clientId
@@ -88,10 +83,11 @@ class NestcollectionsdocgenDriver(AbstractDriver):
             if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
             else CH2PP_TABLE_COLUMNS
         )
-        self.OL_COLUMNS = (
-            CH2_TABLE_COLUMNS[constants.TABLENAME_ORDERLINE]
+
+        self.getOneDoc = (
+            self.getOneCH2Doc
             if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
-            else CH2PP_TABLE_COLUMNS[constants.TABLENAME_ORDERLINE]
+            else self.getOneCH2PPDoc
         )
 
         self.batches = {tableName: [0, [], 0] for tableName in self.TABLE_COLUMNS}
@@ -161,12 +157,6 @@ class NestcollectionsdocgenDriver(AbstractDriver):
                     )
 
         self.batches[tableName] = [batch_idx, cur_batch, batch_size]
-
-    def getOneDoc(self, tableName, tuple):
-        if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]:
-            return self.getOneCH2Doc(tableName, tuple)
-
-        return self.getOneCH2PPDoc(tableName, tuple)
 
     def getOneCH2Doc(self, tableName, tuple):
         columns = self.TABLE_COLUMNS[tableName]
