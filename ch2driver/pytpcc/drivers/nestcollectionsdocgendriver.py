@@ -40,11 +40,9 @@ import constants
 from .abstractdriver import AbstractDriver
 
 
-from .nestcollectionsdriver import KEYNAMES, TABLE_COLUMNS
+from .nestcollectionsdriver import KEYNAMES, CH2_TABLE_COLUMNS, CH2PP_TABLE_COLUMNS
 
 from datetime import datetime
-
-OL_COLUMNS = TABLE_COLUMNS[constants.TABLENAME_ORDERLINE]
 
 
 ## ==============================================
@@ -62,15 +60,41 @@ class NestcollectionsdocgenDriver(AbstractDriver):
         self,
         ddl,
         clientId,
+        TAFlag="L",
+        schema=constants.CH2_DRIVER_SCHEMA["CH2"],
+        preparedTransactionQueries={},
+        analyticalQueries=constants.CH2_DRIVER_ANALYTICAL_QUERIES[
+            "HAND_OPTIMIZED_QUERIES"
+        ],
+        customerExtraFields=constants.CH2_CUSTOMER_EXTRA_FIELDS["NOT_SET"],
+        ordersExtraFields=constants.CH2_ORDERS_EXTRA_FIELDS["NOT_SET"],
+        itemExtraFields=constants.CH2_ITEM_EXTRA_FIELDS["NOT_SET"],
+        load_mode=constants.CH2_DRIVER_LOAD_MODE["NOT_SET"],
+        kv_timeout=constants.CH2_DRIVER_KV_TIMEOUT,
         bulkload_batch_size=constants.CH2_DRIVER_BULKLOAD_BATCH_SIZE,
-        *args,
-        **kwargs,
     ):
         super().__init__("nestcollectionsdocgen", ddl)
         self.client_id = clientId
+        self.schema = schema
         self.bulkload_batch_size = bulkload_batch_size
         self.denormalize = False
-        self.batches = {tableName: [0, [], 0] for tableName in TABLE_COLUMNS}
+
+        self.customerExtraFields = customerExtraFields
+        self.ordersExtraFields = ordersExtraFields
+        self.itemExtraFields = itemExtraFields
+
+        self.TABLE_COLUMNS = (
+            CH2_TABLE_COLUMNS
+            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
+            else CH2PP_TABLE_COLUMNS
+        )
+        self.OL_COLUMNS = (
+            CH2_TABLE_COLUMNS[constants.TABLENAME_ORDERLINE]
+            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
+            else CH2PP_TABLE_COLUMNS[constants.TABLENAME_ORDERLINE]
+        )
+
+        self.batches = {tableName: [0, [], 0] for tableName in self.TABLE_COLUMNS}
 
     ## ----------------------------------------------
     ## makeDefaultConfig
@@ -113,7 +137,7 @@ class NestcollectionsdocgenDriver(AbstractDriver):
             return
 
         logging.debug("Loading %d tuples for tableName %s" % (len(tuples), tableName))
-        assert tableName in TABLE_COLUMNS, "Unexpected table %s" % tableName
+        assert tableName in self.TABLE_COLUMNS, "Unexpected table %s" % tableName
 
         batch_idx, cur_batch, batch_size = self.batches[tableName]
         # For bulk load: load in batches
@@ -139,7 +163,13 @@ class NestcollectionsdocgenDriver(AbstractDriver):
         self.batches[tableName] = [batch_idx, cur_batch, batch_size]
 
     def getOneDoc(self, tableName, tuple):
-        columns = TABLE_COLUMNS[tableName]
+        if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]:
+            return self.getOneCH2Doc(tableName, tuple)
+
+        return self.getOneCH2PPDoc(tableName, tuple)
+
+    def getOneCH2Doc(self, tableName, tuple):
+        columns = self.TABLE_COLUMNS[tableName]
         keynames = KEYNAMES[tableName]
 
         key = str(tuple[keynames[0]])
@@ -150,17 +180,110 @@ class NestcollectionsdocgenDriver(AbstractDriver):
         for v, col in zip(tuple, columns):
             v1 = v
             if tableName == constants.TABLENAME_ORDERS and col == "o_orderline":
-                v1 = [self.genOrderLine(olv) for olv in v]
+                v1 = [
+                    self.genNestedTuple(olv, constants.TABLENAME_ORDERLINE) for olv in v
+                ]
+            elif (
+                tableName == constants.TABLENAME_ITEM
+                and col == "i_categories"
+                or tableName == constants.TABLENAME_CUSTOMER
+                and col == "c_item_categories"
+            ):
+                continue
+            elif tableName == constants.TABLENAME_CUSTOMER and col == "c_extra":
+                for i in range(self.customerExtraFields):
+                    val[f"{col}_{i+1:03d}"] = v1[i]
+                continue
+            elif tableName == constants.TABLENAME_ORDERS and col == "o_extra":
+                for i in range(self.ordersExtraFields):
+                    val[f"{col}_{i+1:03d}"] = v1[i]
+                continue
+            elif tableName == constants.TABLENAME_ITEM and col == "i_extra":
+                for i in range(self.itemExtraFields):
+                    val[f"{col}_{i+1:03d}"] = v1[i]
+                continue
             elif isinstance(v1, datetime):
                 v1 = str(v1)
             val[col] = v1
 
         return val
 
-    def genOrderLine(self, tuple):
+    def getOneCH2PPDoc(self, tableName, tuple):
+        columns = self.TABLE_COLUMNS[tableName]
+        keynames = KEYNAMES[tableName]
+
+        # load only one customer address for CH2P
+        address_slice = (
+            slice(1)
+            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
+            else slice(None)
+        )
+        # load only one customer phone for CH2P
+        phone_slice = (
+            slice(1)
+            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
+            else slice(None)
+        )
+
+        key = str(tuple[keynames[0]])
+        for k in keynames[1:]:
+            key += ".%s" % tuple[k]
+
+        val = {"key": key}
+        for v, col in zip(tuple, columns):
+            v1 = v
+            if tableName == constants.TABLENAME_ORDERS and col == "o_orderline":
+                v1 = [
+                    self.genNestedTuple(olv, constants.TABLENAME_ORDERLINE) for olv in v
+                ]
+            elif self.schema == constants.CH2_DRIVER_SCHEMA["CH2P"] and (
+                tableName == constants.TABLENAME_ITEM
+                and col == "i_categories"
+                or tableName == constants.TABLENAME_CUSTOMER
+                and col == "c_item_categories"
+            ):
+                continue
+            elif tableName == constants.TABLENAME_WAREHOUSE and col == "w_address":
+                v1 = self.genNestedTuple(v, constants.TABLENAME_WAREHOUSE_ADDRESS)
+            elif tableName == constants.TABLENAME_DISTRICT and col == "d_address":
+                v1 = self.genNestedTuple(v, constants.TABLENAME_DISTRICT_ADDRESS)
+            elif tableName == constants.TABLENAME_SUPPLIER and col == "su_address":
+                v1 = self.genNestedTuple(v, constants.TABLENAME_SUPPLIER_ADDRESS)
+            elif tableName == constants.TABLENAME_CUSTOMER:
+                if col == "c_name":
+                    v1 = self.genNestedTuple(v, constants.TABLENAME_CUSTOMER_NAME)
+                elif col == "c_extra":
+                    for i in range(self.customerExtraFields):
+                        val[f"{col}_{i+1:03d}"] = v1[i]
+                    continue
+                elif col == "c_addresses":
+                    v1 = [
+                        self.genNestedTuple(clv, constants.TABLENAME_CUSTOMER_ADDRESSES)
+                        for clv in v[address_slice]
+                    ]
+                elif col == "c_phones":
+                    v1 = [
+                        self.genNestedTuple(clv, constants.TABLENAME_CUSTOMER_PHONES)
+                        for clv in v[phone_slice]
+                    ]
+            elif tableName == constants.TABLENAME_ORDERS and col == "o_extra":
+                for i in range(self.ordersExtraFields):
+                    val[f"{col}_{i+1:03d}"] = v1[i]
+                continue
+            elif tableName == constants.TABLENAME_ITEM and col == "i_extra":
+                for i in range(self.itemExtraFields):
+                    val[f"{col}_{i+1:03d}"] = v1[i]
+                continue
+            elif isinstance(v1, datetime):
+                v1 = str(v1)
+            val[col] = v1
+
+        return val
+
+    def genNestedTuple(self, tuple, tableName):
         rval = {
             col: str(v) if isinstance(v, datetime) else v
-            for col, v in zip(OL_COLUMNS, tuple)
+            for col, v in zip(self.TABLE_COLUMNS[tableName], tuple)
         }
         return rval
 
