@@ -659,10 +659,11 @@ class Loader:
     ## DEF
 
     def computeRandomRangeDate(self, startDate, endDate):
-         delta = endDate - startDate
-         deltaSecs = (delta.days * self.numSecsPerDay) + delta.seconds
-         randomTime = self.randomGen.rng.randrange(deltaSecs)
-         return startDate + timedelta(seconds=randomTime)
+        delta = endDate - startDate
+        deltaSecs = (delta.days * self.numSecsPerDay) + delta.seconds
+        randomTime = int(self.randomGen.rng.random() * deltaSecs)
+        return startDate + timedelta(seconds=randomTime)
+
     ## DEF
 
     def computeRandomRangeTime(self, dateObj):
