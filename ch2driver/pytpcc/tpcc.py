@@ -104,7 +104,21 @@ def startLoading(driverClass, schema, scaleParameters, args, config, customerExt
 ## loaderFunc
 ## ==============================================
 def loaderFunc(clientId, driverClass, schema, scaleParameters, args, config, w_ids, customerExtraFields, ordersExtraFields, itemExtraFields, maxExtraFields, load_mode, load_format, kv_timeout, bulkload_batch_size, datagenSeed, debug):
-    driver = driverClass(args['ddl'], clientId, "L", schema, {}, 0, customerExtraFields, ordersExtraFields, itemExtraFields, load_mode, load_format, kv_timeout, bulkload_batch_size)
+    driver = driverClass(
+        ddl=args["ddl"],
+        clientId=clientId,
+        TAFlag="L",
+        schema=schema,
+        preparedTransactionQueries={},
+        analyticalQueries=0,
+        customerExtraFields=customerExtraFields,
+        ordersExtraFields=ordersExtraFields,
+        itemExtraFields=itemExtraFields,
+        load_mode=load_mode,
+        load_format=load_format,
+        kv_timeout=kv_timeout,
+        bulkload_batch_size=bulkload_batch_size,
+    )
     assert driver != None
     logging.debug("Starting client execution: %s [warehouses=%d]" % (driver, len(w_ids)))
 
@@ -178,7 +192,14 @@ def startExecution(driverClass, schema, preparedTransactionQueries, analyticalQu
 ## executorFunc
 ## ==============================================
 def executorFunc(clientId, TAFlag, driverClass, schema, preparedTransactionQueries, analyticalQueries, qDone, warmupDurationQ, warmupDuration, warmupQueryIterations, numAClients, scaleParameters, args, config, debug):
-    driver = driverClass(args['ddl'], clientId, TAFlag, schema, preparedTransactionQueries, analyticalQueries)
+    driver = driverClass(
+        ddl=args["ddl"],
+        clientId=clientId,
+        TAFlag=TAFlag,
+        schema=schema,
+        preparedTransactionQueries=preparedTransactionQueries,
+        analyticalQueries=analyticalQueries,
+    )
     assert driver != None
     logging.debug("Starting client execution: %s" % driver)
 
@@ -515,7 +536,14 @@ if __name__ == '__main__':
         if numTClients == 0:
             TAFlag = "A"
             val = 0
-        driver = driverClass(args['ddl'], val, TAFlag, schema, preparedTransactionQueries, analyticalQueries)
+        driver = driverClass(
+            ddl=args["ddl"],
+            clientId=val,
+            TAFlag=TAFlag,
+            schema=schema,
+            preparedTransactionQueries=preparedTransactionQueries,
+            analyticalQueries=analyticalQueries,
+        )
     assert driver != None, "Failed to create '%s' driver" % args['system']
     if args['print_config']:
         config = driver.makeDefaultConfig()
