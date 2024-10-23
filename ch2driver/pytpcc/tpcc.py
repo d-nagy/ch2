@@ -495,8 +495,21 @@ if __name__ == '__main__':
     preparedTransactionQueries = {}
     val = -1
     if args['no_execute']:
-         val = 0
-         driver = driverClass(args['ddl'], val, "L", schema, preparedTransactionQueries, 0, customerExtraFields, ordersExtraFields, itemExtraFields, load_mode, load_format, kv_timeout, bulkload_batch_size)
+        val = 0
+        driver = driverClass(
+            ddl=args["ddl"],
+            clientId=val,
+            TAFlag="L",
+            schema=schema,
+            preparedTransactionQueries=preparedTransactionQueries,
+            analyticalQueries=0,
+            customerExtraFields=customerExtraFields,
+            ordersExtraFields=ordersExtraFields,
+            itemExtraFields=itemExtraFields,
+            load_mode=load_mode,
+            kv_timeout=kv_timeout,
+            bulkload_batch_size=bulkload_batch_size,
+        )
     else:
         TAFlag = "T"
         if numTClients == 0:
