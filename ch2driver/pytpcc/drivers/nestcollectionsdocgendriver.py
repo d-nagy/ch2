@@ -34,15 +34,10 @@ from __future__ import with_statement
 import logging
 from pathlib import Path
 
-import orjson
+import ujson
 
 import constants
 from .abstractdriver import AbstractDriver
-
-
-from .nestcollectionsdriver import KEYNAMES, CH2_TABLE_COLUMNS, CH2PP_TABLE_COLUMNS
-
-from datetime import datetime
 
 
 ## ==============================================
@@ -72,25 +67,12 @@ class NestcollectionsdocgenDriver(AbstractDriver):
         self.client_id = clientId
         self.schema = schema
         self.bulkload_batch_size = bulkload_batch_size
-        self.denormalize = False
 
         self.customerExtraFields = customerExtraFields
         self.ordersExtraFields = ordersExtraFields
         self.itemExtraFields = itemExtraFields
 
-        self.TABLE_COLUMNS = (
-            CH2_TABLE_COLUMNS
-            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
-            else CH2PP_TABLE_COLUMNS
-        )
-
-        self.getOneDoc = (
-            self.getOneCH2Doc
-            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
-            else self.getOneCH2PPDoc
-        )
-
-        self.batches = {tableName: [0, [], 0] for tableName in self.TABLE_COLUMNS}
+        self.batches = {tableName: [0, [], 0] for tableName in constants.ALL_TABLES}
 
     ## ----------------------------------------------
     ## makeDefaultConfig
@@ -117,7 +99,7 @@ class NestcollectionsdocgenDriver(AbstractDriver):
             )
         )
         try:
-            with open(filename, "wb") as f:
+            with open(filename, "w") as f:
                 f.writelines(tuples)
         except Exception as e:
             logging.error("Error saving tuples to file: %s" % str(e))
@@ -133,16 +115,16 @@ class NestcollectionsdocgenDriver(AbstractDriver):
             return
 
         logging.debug("Loading %d tuples for tableName %s" % (len(tuples), tableName))
-        assert tableName in self.TABLE_COLUMNS, "Unexpected table %s" % tableName
+        assert tableName in constants.ALL_TABLES, "Unexpected table %s" % tableName
 
         batch_idx, cur_batch, batch_size = self.batches[tableName]
         # For bulk load: load in batches
         for t in tuples:
-            val = orjson.dumps(
-                self.getOneDoc(tableName, t), option=orjson.OPT_APPEND_NEWLINE
-            )
-            cur_batch.append(val)
-            batch_size += len(val)
+            key, val = self.getOneDoc(tableName, t, generateKey=True)
+            val["key"] = key
+            json_val = ujson.dumps(val) + "\n"
+            cur_batch.append(json_val)
+            batch_size += len(json_val)
             if batch_size > self.bulkload_batch_size:
                 result = self.saveTuples(tableName, cur_batch, batch_idx)
                 if result:
@@ -157,125 +139,6 @@ class NestcollectionsdocgenDriver(AbstractDriver):
                     )
 
         self.batches[tableName] = [batch_idx, cur_batch, batch_size]
-
-    def getOneCH2Doc(self, tableName, tuple):
-        columns = self.TABLE_COLUMNS[tableName]
-        keynames = KEYNAMES[tableName]
-
-        key = str(tuple[keynames[0]])
-        for k in keynames[1:]:
-            key += ".%s" % tuple[k]
-
-        val = {"key": key}
-        for v, col in zip(tuple, columns):
-            v1 = v
-            if tableName == constants.TABLENAME_ORDERS and col == "o_orderline":
-                v1 = [
-                    self.genNestedTuple(olv, constants.TABLENAME_ORDERLINE) for olv in v
-                ]
-            elif (
-                tableName == constants.TABLENAME_ITEM
-                and col == "i_categories"
-                or tableName == constants.TABLENAME_CUSTOMER
-                and col == "c_item_categories"
-            ):
-                continue
-            elif tableName == constants.TABLENAME_CUSTOMER and col == "c_extra":
-                for i in range(self.customerExtraFields):
-                    val[f"{col}_{i+1:03d}"] = v1[i]
-                continue
-            elif tableName == constants.TABLENAME_ORDERS and col == "o_extra":
-                for i in range(self.ordersExtraFields):
-                    val[f"{col}_{i+1:03d}"] = v1[i]
-                continue
-            elif tableName == constants.TABLENAME_ITEM and col == "i_extra":
-                for i in range(self.itemExtraFields):
-                    val[f"{col}_{i+1:03d}"] = v1[i]
-                continue
-            elif isinstance(v1, datetime):
-                v1 = str(v1)
-            val[col] = v1
-
-        return val
-
-    def getOneCH2PPDoc(self, tableName, tuple):
-        columns = self.TABLE_COLUMNS[tableName]
-        keynames = KEYNAMES[tableName]
-
-        # load only one customer address for CH2P
-        address_slice = (
-            slice(1)
-            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
-            else slice(None)
-        )
-        # load only one customer phone for CH2P
-        phone_slice = (
-            slice(1)
-            if self.schema == constants.CH2_DRIVER_SCHEMA["CH2"]
-            else slice(None)
-        )
-
-        key = str(tuple[keynames[0]])
-        for k in keynames[1:]:
-            key += ".%s" % tuple[k]
-
-        val = {"key": key}
-        for v, col in zip(tuple, columns):
-            v1 = v
-            if tableName == constants.TABLENAME_ORDERS and col == "o_orderline":
-                v1 = [
-                    self.genNestedTuple(olv, constants.TABLENAME_ORDERLINE) for olv in v
-                ]
-            elif self.schema == constants.CH2_DRIVER_SCHEMA["CH2P"] and (
-                tableName == constants.TABLENAME_ITEM
-                and col == "i_categories"
-                or tableName == constants.TABLENAME_CUSTOMER
-                and col == "c_item_categories"
-            ):
-                continue
-            elif tableName == constants.TABLENAME_WAREHOUSE and col == "w_address":
-                v1 = self.genNestedTuple(v, constants.TABLENAME_WAREHOUSE_ADDRESS)
-            elif tableName == constants.TABLENAME_DISTRICT and col == "d_address":
-                v1 = self.genNestedTuple(v, constants.TABLENAME_DISTRICT_ADDRESS)
-            elif tableName == constants.TABLENAME_SUPPLIER and col == "su_address":
-                v1 = self.genNestedTuple(v, constants.TABLENAME_SUPPLIER_ADDRESS)
-            elif tableName == constants.TABLENAME_CUSTOMER:
-                if col == "c_name":
-                    v1 = self.genNestedTuple(v, constants.TABLENAME_CUSTOMER_NAME)
-                elif col == "c_extra":
-                    for i in range(self.customerExtraFields):
-                        val[f"{col}_{i+1:03d}"] = v1[i]
-                    continue
-                elif col == "c_addresses":
-                    v1 = [
-                        self.genNestedTuple(clv, constants.TABLENAME_CUSTOMER_ADDRESSES)
-                        for clv in v[address_slice]
-                    ]
-                elif col == "c_phones":
-                    v1 = [
-                        self.genNestedTuple(clv, constants.TABLENAME_CUSTOMER_PHONES)
-                        for clv in v[phone_slice]
-                    ]
-            elif tableName == constants.TABLENAME_ORDERS and col == "o_extra":
-                for i in range(self.ordersExtraFields):
-                    val[f"{col}_{i+1:03d}"] = v1[i]
-                continue
-            elif tableName == constants.TABLENAME_ITEM and col == "i_extra":
-                for i in range(self.itemExtraFields):
-                    val[f"{col}_{i+1:03d}"] = v1[i]
-                continue
-            elif isinstance(v1, datetime):
-                v1 = str(v1)
-            val[col] = v1
-
-        return val
-
-    def genNestedTuple(self, tuple, tableName):
-        rval = {
-            col: str(v) if isinstance(v, datetime) else v
-            for col, v in zip(self.TABLE_COLUMNS[tableName], tuple)
-        }
-        return rval
 
     ## ----------------------------------------------
     ## loadFinish

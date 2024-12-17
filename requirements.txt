@@ -1,5 +1,5 @@
 couchbase
 numpy
-orjson
+ujson
 python-dateutil
 requests
